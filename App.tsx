@@ -41,29 +41,6 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const loadDemo = () => {
-    setActiveApps(['moxa', 'railway']);
-    const demoSelection: SelectedTests = {
-      moxa: { 
-        'moxa_default_bf_env': true, 
-        'moxa_default_bf_mech': true, 
-        'm_c1': true, 
-        'm_v1': true 
-      },
-      railway: { 
-        'railway_default_bf_env': true, 
-        'railway_default_bf_mech': true, 
-        'r_c1': true, 
-        'r_v1': true 
-      }
-    };
-    setSelectedTests(demoSelection);
-    setEnvSampleCount(2);
-    setMechSampleCount(1);
-    setStrategy(ExecutionStrategy.PARALLEL);
-    triggerToast("已載入範例資料");
-  };
-
   const toggleApp = (appId: string) => {
     setActiveApps(prev => prev.includes(appId) ? prev.filter(id => id !== appId) : [...prev, appId]);
   };
@@ -200,7 +177,7 @@ const App: React.FC = () => {
   }, [standards, selectedTests, strategy, activeApps, envSampleCount, mechSampleCount]);
 
   return (
-    <div className="min-h-screen bg-[#FDFDFC] flex flex-col xl:flex-row text-[#333D47] font-sans">
+    <div className="min-h-screen bg-[#FDFDFC] flex flex-col xl:flex-row text-[#333D47] font-sans overflow-x-hidden">
       
       {/* 提示訊息 */}
       {showToast && (
@@ -210,13 +187,13 @@ const App: React.FC = () => {
       )}
 
       {/* 左側應用導航軌道 */}
-      <aside className="xl:w-80 w-full bg-white border-r border-slate-100 p-8 flex flex-col shrink-0 no-print">
+      <aside className="xl:w-80 w-full bg-white border-r border-slate-100 p-8 flex flex-col shrink-0 no-print overflow-x-hidden">
         <div className="mb-12">
           <h1 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">DQA 簡易時程評估</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Verification Strategy</p>
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto">
+        <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-2 scrollbar-hide">
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Application Matrix</h4>
           {standards.map(app => (
             <div key={app.id} className="relative group">
@@ -231,22 +208,14 @@ const App: React.FC = () => {
               </button>
               <div className="absolute top-1/2 -right-4 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity translate-x-full pr-4 z-10">
                 <button onClick={() => setEditingStandard({isNew: false, data: app})} className="p-2 bg-white shadow-xl rounded-xl text-slate-400 hover:text-indigo-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
-                {/* Fixed the duplicate onClick and the undefined 'id' variable */}
                 <button onClick={() => deleteStandard(app.id)} className="p-2 bg-white shadow-xl rounded-xl text-slate-400 hover:text-rose-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2}/></svg></button>
               </div>
             </div>
           ))}
-          <button onClick={() => setEditingStandard({isNew: true, data: {icon: 'bolt'}})} className="w-full flex items-center justify-center p-5 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all font-black text-[10px] uppercase tracking-widest gap-2">
+          <button onClick={() => setEditingStandard({isNew: true, data: {icon: 'bolt'}})} className="w-full flex items-center justify-center p-5 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all font-black text-[10px] uppercase tracking-widest gap-2 mb-8">
             <span>+</span> 新增應用標準
           </button>
         </nav>
-
-        <div className="mt-auto pt-8 border-t border-slate-100">
-          <button onClick={loadDemo} className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" strokeWidth={2}/></svg>
-            載入範例資料
-          </button>
-        </div>
       </aside>
 
       {/* 主工作區 */}
