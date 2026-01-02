@@ -30,21 +30,38 @@ const App: React.FC = () => {
   const [mechSampleCount, setMechSampleCount] = useState<number>(0);
   const [editingStandard, setEditingStandard] = useState<{isNew: boolean, data: Partial<StandardData>} | null>(null);
   const [editingTest, setEditingTest] = useState<{standardId: string, isNew: boolean, data: Partial<TestItem>} | null>(null);
+  const [showToast, setShowToast] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('dqa_standards_v4', JSON.stringify(standards));
   }, [standards]);
 
+  const triggerToast = (msg: string) => {
+    setShowToast(msg);
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
   const loadDemo = () => {
     setActiveApps(['moxa', 'railway']);
     const demoSelection: SelectedTests = {
-      moxa: { 'moxa_default_bf': true, 'moxa_default_2d': true, 'm_c1': true, 'm_v1': true },
-      railway: { 'railway_default_bf': true, 'r_c1': true, 'r_v1': true }
+      moxa: { 
+        'moxa_default_bf_env': true, 
+        'moxa_default_bf_mech': true, 
+        'm_c1': true, 
+        'm_v1': true 
+      },
+      railway: { 
+        'railway_default_bf_env': true, 
+        'railway_default_bf_mech': true, 
+        'r_c1': true, 
+        'r_v1': true 
+      }
     };
     setSelectedTests(demoSelection);
     setEnvSampleCount(2);
     setMechSampleCount(1);
     setStrategy(ExecutionStrategy.PARALLEL);
+    triggerToast("已載入範例資料");
   };
 
   const toggleApp = (appId: string) => {
@@ -77,7 +94,6 @@ const App: React.FC = () => {
     const { isNew, data } = editingStandard;
     if (isNew) {
       const newId = `app_${Date.now()}`;
-      // 初始化新應用時帶入基礎測項
       const initialCategories: { [key in CategoryType]?: TestItem[] } = {};
       Object.entries(DEFAULT_MANDATORY_TESTS).forEach(([cat, tests]) => {
         initialCategories[cat as CategoryType] = tests.map(t => ({
@@ -186,14 +202,21 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#FDFDFC] flex flex-col xl:flex-row text-[#333D47] font-sans">
       
-      {/* 左側應用導航軌道 - 寬螢幕專屬 */}
-      <aside className="xl:w-80 w-full bg-white border-r border-slate-100 p-8 flex flex-col shrink-0">
+      {/* 提示訊息 */}
+      {showToast && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[200] bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black shadow-2xl animate-bounce">
+          {showToast}
+        </div>
+      )}
+
+      {/* 左側應用導航軌道 */}
+      <aside className="xl:w-80 w-full bg-white border-r border-slate-100 p-8 flex flex-col shrink-0 no-print">
         <div className="mb-12">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">DQA 專家系統</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">DQA 簡易時程評估</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Verification Strategy</p>
         </div>
 
-        <nav className="flex-1 space-y-4">
+        <nav className="flex-1 space-y-4 overflow-y-auto">
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Application Matrix</h4>
           {standards.map(app => (
             <div key={app.id} className="relative group">
@@ -208,6 +231,7 @@ const App: React.FC = () => {
               </button>
               <div className="absolute top-1/2 -right-4 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity translate-x-full pr-4 z-10">
                 <button onClick={() => setEditingStandard({isNew: false, data: app})} className="p-2 bg-white shadow-xl rounded-xl text-slate-400 hover:text-indigo-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
+                {/* Fixed the duplicate onClick and the undefined 'id' variable */}
                 <button onClick={() => deleteStandard(app.id)} className="p-2 bg-white shadow-xl rounded-xl text-slate-400 hover:text-rose-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2}/></svg></button>
               </div>
             </div>
@@ -220,18 +244,18 @@ const App: React.FC = () => {
         <div className="mt-auto pt-8 border-t border-slate-100">
           <button onClick={loadDemo} className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" strokeWidth={2}/></svg>
-            戴入範例資料
+            載入範例資料
           </button>
         </div>
       </aside>
 
       {/* 主工作區 */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden print-area">
         
-        {/* 上方甘特圖 Dashboard - 固定高度且置頂 */}
+        {/* 上方甘特圖 Dashboard */}
         <section className={`bg-white border-b border-slate-100 px-12 py-8 shrink-0 transition-all ${!calculationResults.hasTests ? 'h-32' : 'h-auto max-h-[45vh] overflow-y-auto'}`}>
           {!calculationResults.hasTests ? (
-            <div className="h-full flex items-center justify-center text-slate-300 italic font-medium">
+            <div className="h-full flex items-center justify-center text-slate-300 italic font-medium no-print">
               請從左側選擇應用領域並選取測試項目以生成時程圖
             </div>
           ) : (
@@ -299,7 +323,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto bg-[#FDFDFC] px-12 py-10">
           <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
             
-            {/* 測項清單區 (8 columns) */}
+            {/* 測項清單區 */}
             <div className="lg:col-span-8 space-y-12">
               {standards.filter(s => activeApps.includes(s.id)).map(standard => (
                 <div key={standard.id} className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-50 transition-all hover:shadow-xl hover:shadow-slate-200/50">
@@ -310,7 +334,7 @@ const App: React.FC = () => {
                       </div>
                       <h2 className="text-xl font-black text-slate-900">{standard.name}</h2>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 no-print">
                       <button onClick={() => setEditingTest({standardId: standard.id, isNew: true, data: {category: CategoryType.CHAMBER, duration: 1}})} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-slate-200 hover:bg-black transition-all">+ 新增測項</button>
                       <button onClick={() => toggleAllInStandard(standard, true)} className="px-5 py-2.5 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:bg-slate-100 transition-colors">全選</button>
                       <button onClick={() => toggleAllInStandard(standard, false)} className="px-5 py-2.5 bg-slate-50 text-rose-500 rounded-xl text-[10px] font-black uppercase hover:bg-rose-50 transition-colors">取消</button>
@@ -337,7 +361,7 @@ const App: React.FC = () => {
                                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                     </div>
                                   </button>
-                                  <div className="absolute top-1/2 -right-12 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover/item:opacity-100 transition-all pointer-events-auto z-10">
+                                  <div className="absolute top-1/2 -right-12 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover/item:opacity-100 transition-all pointer-events-auto z-10 no-print">
                                     <button onClick={(e) => { e.stopPropagation(); setEditingTest({standardId: standard.id, isNew: false, data: item}); }} className="p-1.5 bg-white shadow-xl rounded-lg text-slate-400 hover:text-indigo-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5}/></svg></button>
                                     <button onClick={(e) => { e.stopPropagation(); deleteTestItem(standard.id, cat, item.id); }} className="p-1.5 bg-white shadow-xl rounded-lg text-slate-400 hover:text-rose-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5}/></svg></button>
                                   </div>
@@ -353,8 +377,8 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* 控制面板區 (4 columns) */}
-            <div className="lg:col-span-4 space-y-10">
+            {/* 控制面板區 */}
+            <div className="lg:col-span-4 space-y-10 no-print">
               <div className="sticky top-0 space-y-10">
                 <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border border-slate-800">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/20 rounded-full -mr-16 -mt-16 blur-[60px]"></div>
@@ -411,7 +435,7 @@ const App: React.FC = () => {
                       <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5}/></svg>
                     </button>
                   </div>
-                  <button className="w-full py-6 bg-slate-900 text-white rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:bg-black hover:-translate-y-1 transition-all active:scale-95">更新分析結果</button>
+                  <button onClick={() => window.print()} className="w-full py-6 bg-slate-900 text-white rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:bg-black hover:-translate-y-1 transition-all active:scale-95">輸出列印報表</button>
                 </div>
               </div>
             </div>
@@ -422,7 +446,7 @@ const App: React.FC = () => {
 
       {/* 測項編輯彈窗 */}
       {editingTest && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6 no-print">
           <form onSubmit={saveTestItem} className="bg-white rounded-[3.5rem] p-16 max-w-lg w-full shadow-2xl border border-white/20">
             <h3 className="text-3xl font-black mb-12 text-slate-900 tracking-tight">調整測項參數</h3>
             <div className="space-y-10">
@@ -454,7 +478,7 @@ const App: React.FC = () => {
 
       {/* 領域編輯彈窗 */}
       {editingStandard && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6 no-print">
           <form onSubmit={saveStandard} className="bg-white rounded-[3.5rem] p-16 max-w-md w-full shadow-2xl border border-white/20">
             <h3 className="text-3xl font-black mb-12 text-slate-900 tracking-tight">定義測試標準</h3>
             <div className="space-y-10">
@@ -492,17 +516,6 @@ const getAppIcon = (iconName: string, className: string = "w-6 h-6") => {
     case 'ship': return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 19l9 2-9-18-9 18 9-2" strokeWidth={1.5}/></svg>;
     case 'bolt': return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth={1.5}/></svg>;
     default: return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth={2}/></svg>;
-  }
-};
-
-const getCategoryTrackColor = (category: CategoryType) => {
-  switch (category) {
-    case CategoryType.CHAMBER: return 'bg-[#D6A060]';
-    case CategoryType.VIB_SHOCK: return 'bg-[#6D7B8D]';
-    case CategoryType.DUST_TEST: return 'bg-[#768F7E]';
-    case CategoryType.WATER_TEST: return 'bg-[#3A86FF]';
-    case CategoryType.FUNCTION: return 'bg-[#C26B6B]';
-    default: return 'bg-slate-400';
   }
 };
 

@@ -4,17 +4,17 @@ import { CategoryType, StandardData } from './types';
 // 定義每個應用都必須包含的基礎測項
 export const DEFAULT_MANDATORY_TESTS = {
   [CategoryType.FUNCTION]: [
-    { id: 'default_bf', name: 'Basic Function', duration: 2, category: CategoryType.FUNCTION },
+    { id: 'default_bf_env', name: 'Basic Function (Env)', duration: 2, category: CategoryType.FUNCTION },
   ],
-  [CategoryType.OTHER]: [
-    { id: 'default_2d', name: '2D Inspection', duration: 1, category: CategoryType.OTHER },
+  [CategoryType.VIB_SHOCK]: [
+    { id: 'default_bf_mech', name: 'Basic Function (Mech)', duration: 2, category: CategoryType.VIB_SHOCK },
   ]
 };
 
 const mergeMandatory = (standard: StandardData): StandardData => {
   const newCategories = { ...standard.categories };
   
-  // 處理 Function 類別
+  // 處理 Function 類別 (Track A)
   const existingFunc = newCategories[CategoryType.FUNCTION] || [];
   const mandatoryFunc = DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION].map(item => ({
     ...item,
@@ -22,13 +22,13 @@ const mergeMandatory = (standard: StandardData): StandardData => {
   }));
   newCategories[CategoryType.FUNCTION] = [...mandatoryFunc, ...existingFunc];
 
-  // 處理 Other 類別
-  const existingOther = newCategories[CategoryType.OTHER] || [];
-  const mandatoryOther = DEFAULT_MANDATORY_TESTS[CategoryType.OTHER].map(item => ({
+  // 處理 Vib/Shock 類別 (Track B)
+  const existingVib = newCategories[CategoryType.VIB_SHOCK] || [];
+  const mandatoryVib = DEFAULT_MANDATORY_TESTS[CategoryType.VIB_SHOCK].map(item => ({
     ...item,
     id: `${standard.id}_${item.id}`
   }));
-  newCategories[CategoryType.OTHER] = [...mandatoryOther, ...existingOther];
+  newCategories[CategoryType.VIB_SHOCK] = [...mandatoryVib, ...existingVib];
 
   return { ...standard, categories: newCategories };
 };
