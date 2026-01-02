@@ -1,8 +1,40 @@
 
 import { CategoryType, StandardData } from './types';
 
+// 定義每個應用都必須包含的基礎測項
+export const DEFAULT_MANDATORY_TESTS = {
+  [CategoryType.FUNCTION]: [
+    { id: 'default_bf', name: 'Basic Function', duration: 2, category: CategoryType.FUNCTION },
+  ],
+  [CategoryType.OTHER]: [
+    { id: 'default_2d', name: '2D Inspection', duration: 1, category: CategoryType.OTHER },
+  ]
+};
+
+const mergeMandatory = (standard: StandardData): StandardData => {
+  const newCategories = { ...standard.categories };
+  
+  // 處理 Function 類別
+  const existingFunc = newCategories[CategoryType.FUNCTION] || [];
+  const mandatoryFunc = DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION].map(item => ({
+    ...item,
+    id: `${standard.id}_${item.id}`
+  }));
+  newCategories[CategoryType.FUNCTION] = [...mandatoryFunc, ...existingFunc];
+
+  // 處理 Other 類別
+  const existingOther = newCategories[CategoryType.OTHER] || [];
+  const mandatoryOther = DEFAULT_MANDATORY_TESTS[CategoryType.OTHER].map(item => ({
+    ...item,
+    id: `${standard.id}_${item.id}`
+  }));
+  newCategories[CategoryType.OTHER] = [...mandatoryOther, ...existingOther];
+
+  return { ...standard, categories: newCategories };
+};
+
 export const STANDARDS_DATA: StandardData[] = [
-  {
+  mergeMandatory({
     id: 'moxa',
     name: 'Moxa Industrial',
     description: '核心工業自動化標準',
@@ -25,26 +57,28 @@ export const STANDARDS_DATA: StandardData[] = [
         { id: 'm_v4', name: 'PKG Vib', duration: 1, category: CategoryType.VIB_SHOCK },
         { id: 'm_v5', name: 'PKG Drop', duration: 1, category: CategoryType.VIB_SHOCK },
       ],
-      [CategoryType.IP_TEST]: [
-        { id: 'm_ip2x', name: 'IP 2X', duration: 2, category: CategoryType.IP_TEST },
-        { id: 'm_ip3x', name: 'IP 3X', duration: 1, category: CategoryType.IP_TEST },
-        { id: 'm_ip4x', name: 'IP 4X', duration: 1, category: CategoryType.IP_TEST },
-        { id: 'm_ip5x', name: 'IP 5X', duration: 2, category: CategoryType.IP_TEST },
-        { id: 'm_ip6x', name: 'IP 6X', duration: 3.5, category: CategoryType.IP_TEST },
-        { id: 'm_ipx2', name: 'IP X2', duration: 2, category: CategoryType.IP_TEST },
-        { id: 'm_ipx3', name: 'IP X3', duration: 2, category: CategoryType.IP_TEST },
-        { id: 'm_ipx4', name: 'IP X4', duration: 2, category: CategoryType.IP_TEST },
-        { id: 'm_ipx5', name: 'IP X5', duration: 4.5, category: CategoryType.IP_TEST },
-        { id: 'm_ipx6', name: 'IP X6', duration: 4.5, category: CategoryType.IP_TEST },
-        { id: 'm_ipx7', name: 'IP X7', duration: 4.5, category: CategoryType.IP_TEST },
-        { id: 'm_ipx8', name: 'IP X8', duration: 4.5, category: CategoryType.IP_TEST },
+      [CategoryType.DUST_TEST]: [
+        { id: 'm_ip2x', name: 'IP 2X', duration: 2, category: CategoryType.DUST_TEST },
+        { id: 'm_ip3x', name: 'IP 3X', duration: 1, category: CategoryType.DUST_TEST },
+        { id: 'm_ip4x', name: 'IP 4X', duration: 1, category: CategoryType.DUST_TEST },
+        { id: 'm_ip5x', name: 'IP 5X', duration: 2, category: CategoryType.DUST_TEST },
+        { id: 'm_ip6x', name: 'IP 6X', duration: 3.5, category: CategoryType.DUST_TEST },
+      ],
+      [CategoryType.WATER_TEST]: [
+        { id: 'm_ipx2', name: 'IP X2', duration: 2, category: CategoryType.WATER_TEST },
+        { id: 'm_ipx3', name: 'IP X3', duration: 2, category: CategoryType.WATER_TEST },
+        { id: 'm_ipx4', name: 'IP X4', duration: 2, category: CategoryType.WATER_TEST },
+        { id: 'm_ipx5', name: 'IP X5', duration: 4.5, category: CategoryType.WATER_TEST },
+        { id: 'm_ipx6', name: 'IP X6', duration: 4.5, category: CategoryType.WATER_TEST },
+        { id: 'm_ipx7', name: 'IP X7', duration: 4.5, category: CategoryType.WATER_TEST },
+        { id: 'm_ipx8', name: 'IP X8', duration: 4.5, category: CategoryType.WATER_TEST },
       ],
       [CategoryType.OTHER]: [
         { id: 'm_o1', name: 'Salt mist', duration: 3.5, category: CategoryType.OTHER },
       ]
     }
-  },
-  {
+  }),
+  mergeMandatory({
     id: 'railway',
     name: 'Railway',
     description: 'EN 50155 軌道交通',
@@ -59,13 +93,10 @@ export const STANDARDS_DATA: StandardData[] = [
         { id: 'r_v1', name: 'LongLife test (Rand vib)', duration: 1, category: CategoryType.VIB_SHOCK },
         { id: 'r_v2', name: 'Shock test (Half sine)', duration: 1, category: CategoryType.VIB_SHOCK },
         { id: 'r_v3', name: 'Functional test (Rand vib)', duration: 1, category: CategoryType.VIB_SHOCK },
-      ],
-      [CategoryType.FUNCTION]: [
-        { id: 'r_f1', name: 'Inrush current', duration: 1, category: CategoryType.FUNCTION },
       ]
     }
-  },
-  {
+  }),
+  mergeMandatory({
     id: 'marine',
     name: 'Marine',
     description: 'DNVGL 船舶設備',
@@ -83,8 +114,8 @@ export const STANDARDS_DATA: StandardData[] = [
         { id: 'mr_v2', name: 'Wideband random', duration: 1, category: CategoryType.VIB_SHOCK },
       ]
     }
-  },
-  {
+  }),
+  mergeMandatory({
     id: 'power',
     name: 'Power Station',
     description: 'IEC 61850-3 變電站',
@@ -107,10 +138,7 @@ export const STANDARDS_DATA: StandardData[] = [
         { id: 'p_v4', name: 'Shock withstand', duration: 0.5, category: CategoryType.VIB_SHOCK },
         { id: 'p_v5', name: 'Bump test', duration: 1, category: CategoryType.VIB_SHOCK },
         { id: 'p_v6', name: 'Seismic test', duration: 2, category: CategoryType.VIB_SHOCK },
-      ],
-      [CategoryType.FUNCTION]: [
-        { id: 'p_f1', name: 'Burden', duration: 1, category: CategoryType.FUNCTION },
       ]
     }
-  }
+  })
 ];

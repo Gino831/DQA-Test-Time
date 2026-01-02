@@ -2,7 +2,8 @@
 export enum CategoryType {
   CHAMBER = 'Chamber 應用',
   VIB_SHOCK = '振動衝擊應用',
-  IP_TEST = 'IP 防護測試',
+  DUST_TEST = '防塵測試',
+  WATER_TEST = '防水測試',
   FUNCTION = '功能測試',
   OTHER = '其他測試'
 }
