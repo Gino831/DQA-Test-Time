@@ -5,6 +5,7 @@ import { CategoryType, StandardData } from './types';
 export const DEFAULT_MANDATORY_TESTS = {
   [CategoryType.FUNCTION]: [
     { id: 'default_bf_env', name: 'Basic Function (Env)', duration: 2, category: CategoryType.FUNCTION },
+    { id: 'default_bf_pkg', name: 'Basic Function (PKG)', duration: 2, category: CategoryType.FUNCTION },
   ],
   [CategoryType.VIB_SHOCK]: [
     { id: 'default_bf_mech', name: 'Basic Function (Mech)', duration: 2, category: CategoryType.VIB_SHOCK },
@@ -14,12 +15,18 @@ export const DEFAULT_MANDATORY_TESTS = {
 const mergeMandatory = (standard: StandardData): StandardData => {
   const newCategories = { ...standard.categories };
   
-  // 處理 Function 類別 (Track A)
+  // 處理 Function 類別 (Track A / PKG Track)
   const existingFunc = newCategories[CategoryType.FUNCTION] || [];
-  const mandatoryFunc = DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION].map(item => ({
-    ...item,
-    id: `${standard.id}_${item.id}`
-  }));
+  const mandatoryFunc = DEFAULT_MANDATORY_TESTS[CategoryType.FUNCTION]
+    .filter(item => {
+      // 只有 Moxa 才強制包含 PKG 的 Basic Function
+      if (item.id === 'default_bf_pkg') return standard.id === 'moxa';
+      return true;
+    })
+    .map(item => ({
+      ...item,
+      id: `${standard.id}_${item.id}`
+    }));
   newCategories[CategoryType.FUNCTION] = [...mandatoryFunc, ...existingFunc];
 
   // 處理 Vib/Shock 類別 (Track B)

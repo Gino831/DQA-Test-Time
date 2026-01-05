@@ -5,41 +5,43 @@ import {
   TestItem, 
   StandardData, 
   ExecutionStrategy, 
+  PkgSampleStrategy,
   SelectedTests,
 } from './types';
-import { STANDARDS_DATA as INITIAL_DATA, DEFAULT_MANDATORY_TESTS } from './constants';
+import { STANDARDS_DATA as INITIAL_DATA } from './constants';
 
 const APP_COLORS: Record<string, string> = {
-  moxa: 'bg-indigo-500',
+  moxa: 'bg-indigo-600',
   railway: 'bg-amber-500',
-  marine: 'bg-emerald-500',
-  power: 'bg-sky-500',
-  default: 'bg-slate-500'
+  marine: 'bg-cyan-600',
+  power: 'bg-emerald-600',
+  default: 'bg-slate-500',
+  pkg_prep: 'bg-slate-200',
+  pkg_item: 'bg-slate-800'
 };
 
 const App: React.FC = () => {
   const [standards, setStandards] = useState<StandardData[]>(() => {
-    const saved = localStorage.getItem('dqa_standards_v4');
+    const saved = localStorage.getItem('dqa_planner_v13');
     return saved ? JSON.parse(saved) : INITIAL_DATA;
   });
 
   const [activeApps, setActiveApps] = useState<string[]>(['moxa']);
   const [selectedTests, setSelectedTests] = useState<SelectedTests>({});
   const [strategy, setStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
-  const [envSampleCount, setEnvSampleCount] = useState<number>(0);
-  const [mechSampleCount, setMechSampleCount] = useState<number>(0);
+  const [storageStrategy, setStorageStrategy] = useState<ExecutionStrategy>(ExecutionStrategy.PARALLEL);
+  const [pkgStrategy, setPkgStrategy] = useState<PkgSampleStrategy>(PkgSampleStrategy.REUSE);
+  
+  const [envSampleCount, setEnvSampleCount] = useState<number>(1);
+  const [mechSampleCount, setMechSampleCount] = useState<number>(1);
+  const [pkgSampleCount, setPkgSampleCount] = useState<number>(1);
+
   const [editingStandard, setEditingStandard] = useState<{isNew: boolean, data: Partial<StandardData>} | null>(null);
   const [editingTest, setEditingTest] = useState<{standardId: string, isNew: boolean, data: Partial<TestItem>} | null>(null);
-  const [showToast, setShowToast] = useState<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('dqa_standards_v4', JSON.stringify(standards));
+    localStorage.setItem('dqa_planner_v13', JSON.stringify(standards));
   }, [standards]);
-
-  const triggerToast = (msg: string) => {
-    setShowToast(msg);
-    setTimeout(() => setShowToast(null), 3000);
-  };
 
   const toggleApp = (appId: string) => {
     setActiveApps(prev => prev.includes(appId) ? prev.filter(id => id !== appId) : [...prev, appId]);
@@ -47,21 +49,46 @@ const App: React.FC = () => {
 
   const toggleTest = (standardId: string, itemId: string) => {
     setSelectedTests(prev => {
-      const standard = prev[standardId] || {};
-      const newStandard = { ...standard, [itemId]: !standard[itemId] };
-      return { ...prev, [standardId]: newStandard };
+      const standardSelection = prev[standardId] || {};
+      return {
+        ...prev,
+        [standardId]: { ...standardSelection, [itemId]: !standardSelection[itemId] }
+      };
     });
   };
 
   const toggleAllInStandard = (standard: StandardData, select: boolean) => {
     setSelectedTests(prev => {
-      const newStandardTests: { [key: string]: boolean } = {};
+      const standardSelection: Record<string, boolean> = {};
       Object.values(standard.categories).forEach(items => {
-        (items as TestItem[] | undefined)?.forEach(item => { 
-          newStandardTests[item.id] = select; 
+        items?.forEach(item => {
+          standardSelection[item.id] = select;
         });
       });
-      return { ...prev, [standard.id]: newStandardTests };
+      return { ...prev, [standard.id]: standardSelection };
+    });
+  };
+
+  const deleteTestItem = (e: React.MouseEvent, standardId: string, category: CategoryType, itemId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm('確定要永久刪除此測試項目嗎？')) return;
+    setStandards(prev => prev.map(s => {
+      if (s.id !== standardId) return s;
+      const updatedCats = { ...s.categories };
+      if (updatedCats[category]) {
+        updatedCats[category] = updatedCats[category]!.filter(i => i.id !== itemId);
+      }
+      return { ...s, categories: updatedCats };
+    }));
+    setSelectedTests(prev => {
+      const next = { ...prev };
+      if (next[standardId]) {
+        const updated = { ...next[standardId] };
+        delete updated[itemId];
+        next[standardId] = updated;
+      }
+      return next;
     });
   };
 
@@ -71,33 +98,11 @@ const App: React.FC = () => {
     const { isNew, data } = editingStandard;
     if (isNew) {
       const newId = `app_${Date.now()}`;
-      const initialCategories: { [key in CategoryType]?: TestItem[] } = {};
-      Object.entries(DEFAULT_MANDATORY_TESTS).forEach(([cat, tests]) => {
-        initialCategories[cat as CategoryType] = tests.map(t => ({
-          ...t,
-          id: `${newId}_${t.id}`
-        }));
-      });
-
-      const newApp: StandardData = {
-        id: newId,
-        name: data.name || '新應用領域',
-        description: data.description || '標準描述',
-        icon: data.icon || 'bolt',
-        categories: initialCategories
-      };
-      setStandards([...standards, newApp]);
+      setStandards([...standards, { id: newId, name: data.name || '新領域', description: '', icon: data.icon || 'bolt', categories: {} }]);
     } else {
       setStandards(standards.map(s => s.id === data.id ? { ...s, ...data } : s));
     }
     setEditingStandard(null);
-  };
-
-  const deleteStandard = (id: string) => {
-    if (confirm('確定要刪除此應用領域嗎？')) {
-      setStandards(standards.filter(s => s.id !== id));
-      setActiveApps(activeApps.filter(appId => appId !== id));
-    }
   };
 
   const saveTestItem = (e: React.FormEvent) => {
@@ -108,10 +113,9 @@ const App: React.FC = () => {
       if (s.id !== standardId) return s;
       const cat = (data.category as CategoryType) || CategoryType.CHAMBER;
       const currentItems = s.categories[cat] || [];
-      let newCategories = { ...s.categories };
+      const newCategories = { ...s.categories };
       if (isNew) {
-        const newItem: TestItem = { id: `test_${Date.now()}`, name: data.name || '新測項', duration: data.duration || 1, category: cat };
-        newCategories[cat] = [...currentItems, newItem];
+        newCategories[cat] = [...currentItems, { id: `t_${Date.now()}`, name: data.name || '新測項', duration: data.duration || 1, category: cat }];
       } else {
         newCategories[cat] = currentItems.map(i => i.id === data.id ? { ...i, ...data } : i);
       }
@@ -120,219 +124,301 @@ const App: React.FC = () => {
     setEditingTest(null);
   };
 
-  const deleteTestItem = (standardId: string, category: CategoryType, itemId: string) => {
-    if (confirm('確定刪除此測項？')) {
-      setStandards(prev => prev.map(s => {
-        if (s.id !== standardId) return s;
-        return {
-          ...s,
-          categories: { ...s.categories, [category]: (s.categories[category] || []).filter(i => i.id !== itemId) }
-        };
-      }));
-    }
-  };
-
   const calculationResults = useMemo(() => {
     const envTracks = [CategoryType.CHAMBER, CategoryType.DUST_TEST, CategoryType.WATER_TEST, CategoryType.FUNCTION, CategoryType.OTHER];
-    const mechTracks = [CategoryType.VIB_SHOCK];
-    const envBreakdown: { appId: string, name: string, days: number, color: string }[] = [];
-    const mechBreakdown: { appId: string, name: string, days: number, color: string }[] = [];
+    const trackABreakdown: { name: string, days: number, color: string, type: 'env' | 'prep' | 'pkg' }[] = [];
+    const trackBBreakdown: { name: string, days: number, color: string }[] = [];
+    const trackCBreakdown: { name: string, days: number, color: string }[] = [];
+
+    let totalEnvDays = 0;
+    let totalPkgDays = 0;
+    let totalMechDays = 0;
+    let anyPkgSelected = false;
 
     standards.forEach(standard => {
       if (!activeApps.includes(standard.id)) return;
       const selectedMap = selectedTests[standard.id] || {};
-      let appEnvDays = 0;
-      let appMechDays = 0;
+      
+      let appEnvSum = 0;
+      let appStorageDays: number[] = [];
+      let appPkgSum = 0;
+      let appMechSum = 0;
 
       Object.entries(standard.categories).forEach(([cat, items]) => {
         const catType = cat as CategoryType;
-        const itemsList = items as TestItem[] | undefined;
-        itemsList?.forEach(item => {
+        (items as TestItem[] | undefined)?.forEach(item => {
           if (selectedMap[item.id]) {
-            if (envTracks.includes(catType)) appEnvDays += item.duration;
-            if (mechTracks.includes(catType)) appMechDays += item.duration;
+            const isPkg = item.name.toLowerCase().includes('pkg');
+            const isStorage = item.name.toLowerCase().includes('storage');
+
+            if (isPkg) {
+              appPkgSum += item.duration;
+              anyPkgSelected = true;
+            } else if (envTracks.includes(catType)) {
+              if (isStorage) appStorageDays.push(item.duration);
+              else appEnvSum += item.duration;
+            } else {
+              appMechSum += item.duration;
+            }
           }
         });
       });
 
-      if (appEnvDays > 0) envBreakdown.push({ appId: standard.id, name: standard.name, days: appEnvDays, color: APP_COLORS[standard.id] || APP_COLORS.default });
-      if (appMechDays > 0) mechBreakdown.push({ appId: standard.id, name: standard.name, days: appMechDays, color: APP_COLORS[standard.id] || APP_COLORS.default });
+      let appEnvTotal = appEnvSum;
+      if (appStorageDays.length > 0) {
+        appEnvTotal += storageStrategy === ExecutionStrategy.PARALLEL ? Math.max(...appStorageDays) : appStorageDays.reduce((a,b)=>a+b, 0);
+      }
+
+      if (appEnvTotal > 0) {
+        totalEnvDays += appEnvTotal;
+        trackABreakdown.push({ name: `${standard.name}`, days: appEnvTotal, color: APP_COLORS[standard.id] || APP_COLORS.default, type: 'env' });
+      }
+      if (appMechSum > 0) {
+        totalMechDays += appMechSum;
+        trackBBreakdown.push({ name: `${standard.name}`, days: appMechSum, color: APP_COLORS[standard.id] || APP_COLORS.default });
+      }
+      if (appPkgSum > 0) {
+        totalPkgDays += appPkgSum;
+        if (pkgStrategy === PkgSampleStrategy.INDEPENDENT) {
+          trackCBreakdown.push({ name: `${standard.name} PKG`, days: appPkgSum, color: APP_COLORS.pkg_item });
+        }
+      }
     });
 
-    const envWD = envBreakdown.reduce((sum, b) => sum + b.days, 0);
-    const mechWD = mechBreakdown.reduce((sum, b) => sum + b.days, 0);
-    const totalWD = strategy === ExecutionStrategy.SERIAL || (envSampleCount + mechSampleCount === 1) ? (envWD + mechWD) : Math.max(envWD, mechWD);
+    let trackATotal = totalEnvDays;
+    let trackCTotal = totalPkgDays;
+
+    if (anyPkgSelected && pkgStrategy === PkgSampleStrategy.REUSE) {
+      trackABreakdown.push({ name: '樣品整理', days: 7, color: APP_COLORS.pkg_prep, type: 'prep' });
+      if (totalPkgDays > 0) {
+        trackABreakdown.push({ name: 'PKG 測試', days: totalPkgDays, color: APP_COLORS.pkg_item, type: 'pkg' });
+      }
+      trackATotal = totalEnvDays + 7 + totalPkgDays;
+      trackCTotal = 0;
+    }
+
+    const trackBTotal = totalMechDays;
+    
+    let finalTotalDays = 0;
+    if (strategy === ExecutionStrategy.SERIAL) {
+      finalTotalDays = trackATotal + trackBTotal + trackCTotal;
+    } else {
+      finalTotalDays = Math.max(trackATotal, trackBTotal, trackCTotal);
+    }
+
+    const totalUnitsNeeded = envSampleCount + mechSampleCount + (pkgStrategy === PkgSampleStrategy.INDEPENDENT ? pkgSampleCount : 0);
 
     return { 
-      totalDays: totalWD, 
-      envDays: envWD, 
-      mechDays: mechWD, 
-      envBreakdown,
-      mechBreakdown,
-      totalSelectedUnits: envSampleCount + mechSampleCount,
-      isSingleSampleMode: (envSampleCount + mechSampleCount === 1),
-      currentExecutionMode: (strategy === ExecutionStrategy.SERIAL || (envSampleCount + mechSampleCount === 1)) ? ExecutionStrategy.SERIAL : ExecutionStrategy.PARALLEL,
-      hasTests: (envWD + mechWD > 0) 
+      totalDays: finalTotalDays, 
+      trackATotal, 
+      trackBTotal,
+      trackCTotal,
+      trackABreakdown,
+      trackBBreakdown,
+      trackCBreakdown,
+      hasTests: (trackATotal + trackBTotal + trackCTotal > 0),
+      totalUnits: totalUnitsNeeded,
+      currentStrategy: (totalUnitsNeeded <= 1) ? ExecutionStrategy.SERIAL : strategy
     };
-  }, [standards, selectedTests, strategy, activeApps, envSampleCount, mechSampleCount]);
+  }, [standards, selectedTests, strategy, storageStrategy, pkgStrategy, activeApps, envSampleCount, mechSampleCount, pkgSampleCount]);
 
   return (
-    <div className="min-h-screen bg-[#FDFDFC] flex flex-col xl:flex-row text-[#333D47] font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-800 font-sans">
       
-      {/* 提示訊息 */}
-      {showToast && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[200] bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black shadow-2xl animate-bounce">
-          {showToast}
-        </div>
-      )}
-
-      {/* 左側應用導航軌道 */}
-      <aside className="xl:w-80 w-full bg-white border-r border-slate-100 p-8 flex flex-col shrink-0 no-print overflow-x-hidden">
-        <div className="mb-12">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">DQA 簡易時程評估</h1>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Verification Strategy</p>
+      {/* Sidebar - Compact Selection */}
+      <aside className="w-full md:w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto no-print">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">DQA Planner</h1>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Industrial Standards</p>
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-2 scrollbar-hide">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Application Matrix</h4>
+        <div className="p-4 space-y-2">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] px-2 mb-2">應用領域選單</p>
           {standards.map(app => (
-            <div key={app.id} className="relative group">
-              <button onClick={() => toggleApp(app.id)} className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 ${activeApps.includes(app.id) ? 'border-slate-900 bg-slate-50 shadow-md ring-2 ring-slate-900/5' : 'border-slate-50 bg-white hover:border-slate-200'}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${activeApps.includes(app.id) ? (APP_COLORS[app.id] || APP_COLORS.default) + ' text-white' : 'bg-slate-50 text-slate-300'}`}>
-                  {getAppIcon(app.icon, "w-5 h-5")}
+            <div key={app.id} className="group relative">
+              <button 
+                onClick={() => toggleApp(app.id)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border ${activeApps.includes(app.id) ? 'bg-indigo-50 border-indigo-100 text-indigo-700 shadow-sm' : 'bg-white border-transparent hover:bg-slate-50 text-slate-500'}`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${activeApps.includes(app.id) ? (APP_COLORS[app.id] || APP_COLORS.default) + ' text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  {getAppIcon(app.icon, "w-4 h-4")}
                 </div>
-                <div className="text-left overflow-hidden">
-                  <span className={`text-sm font-black block truncate ${activeApps.includes(app.id) ? 'text-slate-900' : 'text-slate-400'}`}>{app.name}</span>
-                  <span className="text-[9px] font-bold text-slate-300 uppercase truncate">Active Application</span>
-                </div>
+                <span className="font-bold text-xs text-left truncate">{app.name}</span>
               </button>
-              <div className="absolute top-1/2 -right-4 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity translate-x-full pr-4 z-10">
-                <button onClick={() => setEditingStandard({isNew: false, data: app})} className="p-2 bg-white shadow-xl rounded-xl text-slate-400 hover:text-indigo-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
-                <button onClick={() => deleteStandard(app.id)} className="p-2 bg-white shadow-xl rounded-xl text-slate-400 hover:text-rose-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2}/></svg></button>
-              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); setEditingStandard({isNew: false, data: app}); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-300 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg>
+              </button>
             </div>
           ))}
-          <button onClick={() => setEditingStandard({isNew: true, data: {icon: 'bolt'}})} className="w-full flex items-center justify-center p-5 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all font-black text-[10px] uppercase tracking-widest gap-2 mb-8">
-            <span>+</span> 新增應用標準
+          <button 
+            onClick={() => setEditingStandard({isNew: true, data: {icon: 'bolt'}})}
+            className="w-full p-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-all text-[10px] font-bold uppercase tracking-widest mt-4"
+          >
+            + 新增應用類別
           </button>
-        </nav>
+        </div>
       </aside>
 
-      {/* 主工作區 */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden print-area">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
         
-        {/* 上方甘特圖 Dashboard */}
-        <section className={`bg-white border-b border-slate-100 px-12 py-8 shrink-0 transition-all ${!calculationResults.hasTests ? 'h-32' : 'h-auto max-h-[45vh] overflow-y-auto'}`}>
+        {/* Gantt / Summary Header */}
+        <section className="bg-white border-b border-slate-200 p-6 lg:px-10 shrink-0 shadow-sm z-10">
           {!calculationResults.hasTests ? (
-            <div className="h-full flex items-center justify-center text-slate-300 italic font-medium no-print">
-              請從左側選擇應用領域並選取測試項目以生成時程圖
-            </div>
+            <div className="w-full text-center py-6 text-slate-300 font-medium italic">請選取測項開始評估</div>
           ) : (
-            <div className="max-w-[1600px] mx-auto">
-              <div className="flex justify-between items-end mb-10">
-                <div className="space-y-1">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Project Timeline Analyzer</h4>
-                  <h3 className="text-2xl font-black text-slate-900">關鍵路徑與樣本分配分析</h3>
+            <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-10">
+              <div className="flex-1 w-full space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-2 w-2 rounded-full bg-indigo-500 shadow-sm animate-pulse"></div>
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Time Analysis Gantt</h3>
                 </div>
-                <div className="flex items-center gap-12 text-right">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Working Days</span>
-                    <span className="text-5xl font-black text-indigo-600 tracking-tighter tabular-nums">{calculationResults.totalDays}</span>
-                  </div>
-                  <div className="h-12 w-px bg-slate-100"></div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sets Required</span>
-                    <span className="text-5xl font-black text-slate-900 tracking-tighter tabular-nums">{calculationResults.totalSelectedUnits}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-12">
-                {/* Track A */}
-                {calculationResults.envDays > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      <span>Track A: Environmental ({calculationResults.envDays} WD)</span>
+                
+                <div className="space-y-4">
+                  {/* Track A */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase px-1">
+                      <span>Track A: 環境 & {pkgStrategy === PkgSampleStrategy.REUSE ? '包裝延用' : '環境測項'}</span>
+                      <span className="tabular-nums font-black text-indigo-600">{calculationResults.trackATotal} WD</span>
                     </div>
-                    <div className="h-14 w-full bg-slate-50 rounded-2xl flex overflow-hidden border border-slate-100 shadow-inner">
-                      {calculationResults.envBreakdown.map(seg => (
-                        <div key={seg.appId} className={`${seg.color} h-full border-r border-white/20 last:border-r-0 flex flex-col items-center justify-center relative group/seg`} style={{ width: `${(seg.days / calculationResults.totalDays) * 100}%` }}>
-                          <span className="text-[9px] font-black text-white/90 truncate px-2">{seg.name} ({seg.days}D)</span>
+                    <div className="h-10 w-full bg-slate-50 rounded-xl flex overflow-hidden border border-slate-100">
+                      {calculationResults.trackABreakdown.map((seg, i) => (
+                        <div key={i} className={`${seg.color} h-full border-r border-white/20 last:border-0 flex items-center justify-center transition-all hover:brightness-95`} style={{ width: `${(seg.days / calculationResults.totalDays) * 100}%` }}>
+                          <span className={`text-[10px] font-black truncate px-2 ${seg.type === 'prep' ? 'text-slate-500 italic font-medium' : 'text-white'}`}>
+                            {seg.name} ({seg.days}D)
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
-                {/* Track B */}
-                {calculationResults.mechDays > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      <span>Track B: Mechanical ({calculationResults.mechDays} WD)</span>
-                    </div>
-                    <div className="h-14 w-full bg-slate-50 rounded-2xl relative overflow-hidden border border-slate-100 flex shadow-inner">
-                      <div className="absolute top-0 bottom-0 flex transition-all duration-500" style={{ 
-                        left: calculationResults.currentExecutionMode === ExecutionStrategy.SERIAL ? `${(calculationResults.envDays / calculationResults.totalDays) * 100}%` : '0', 
-                        width: `${(calculationResults.mechDays / calculationResults.totalDays) * 100}%` 
-                      }}>
-                        {calculationResults.mechBreakdown.map(seg => (
-                          <div key={seg.appId} className={`${seg.color} h-full border-r border-white/20 last:border-r-0 flex flex-col items-center justify-center group/seg`} style={{ width: `${(seg.days / calculationResults.mechDays) * 100}%` }}>
-                            <span className="text-[9px] font-black text-white/90 truncate px-2">{seg.name} ({seg.days}D)</span>
-                          </div>
-                        ))}
+
+                  {/* Track B */}
+                  {calculationResults.trackBTotal > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase px-1">
+                        <span>Track B: 機械力相關測試</span>
+                        <span className="tabular-nums font-black text-slate-600">{calculationResults.trackBTotal} WD</span>
+                      </div>
+                      <div className="h-10 w-full bg-slate-50 rounded-xl relative overflow-hidden border border-slate-100">
+                        <div className="absolute top-0 bottom-0 flex transition-all duration-700 ease-out" style={{ 
+                          left: calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? `${(calculationResults.trackATotal / calculationResults.totalDays) * 100}%` : '0', 
+                          width: `${(calculationResults.trackBTotal / calculationResults.totalDays) * 100}%` 
+                        }}>
+                          {calculationResults.trackBBreakdown.map((seg, i) => (
+                            <div key={i} className={`${seg.color} h-full border-r border-white/20 last:border-0 flex items-center justify-center hover:brightness-95`} style={{ width: `${(seg.days / calculationResults.trackBTotal) * 100}%` }}>
+                              <span className="text-[10px] font-black text-white px-2 truncate">
+                                {seg.name} ({seg.days}D)
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Track C */}
+                  {pkgStrategy === PkgSampleStrategy.INDEPENDENT && calculationResults.trackCTotal > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase px-1">
+                        <span>Track C: 獨立包裝測試</span>
+                        <span className="tabular-nums font-black text-slate-600">{calculationResults.trackCTotal} WD</span>
+                      </div>
+                      <div className="h-10 w-full bg-slate-50 rounded-xl relative overflow-hidden border border-slate-100">
+                        <div className="absolute top-0 bottom-0 flex transition-all duration-700 ease-out" style={{ 
+                          left: calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? `${((calculationResults.trackATotal + calculationResults.trackBTotal) / calculationResults.totalDays) * 100}%` : '0', 
+                          width: `${(calculationResults.trackCTotal / calculationResults.totalDays) * 100}%` 
+                        }}>
+                          {calculationResults.trackCBreakdown.map((seg, i) => (
+                            <div key={i} className={`${seg.color} h-full border-r border-white/20 last:border-0 flex items-center justify-center hover:brightness-95`} style={{ width: `${(seg.days / calculationResults.trackCTotal) * 100}%` }}>
+                              <span className="text-[10px] font-black text-white px-2 truncate">
+                                {seg.name} ({seg.days}D)
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Numerical Overview */}
+              <div className="flex gap-10 shrink-0 border-l border-slate-100 pl-10 h-full items-center">
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">評估總工期</p>
+                  <div className="flex items-baseline justify-end text-indigo-600">
+                    <span className="text-5xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalDays}</span>
+                    <span className="text-xs font-bold ml-1 uppercase">WD</span>
                   </div>
-                )}
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">樣本需求組數</p>
+                  <div className="flex items-baseline justify-end text-slate-900">
+                    <span className="text-5xl font-light tabular-nums leading-none tracking-tighter">{calculationResults.totalUnits}</span>
+                    <span className="text-xs font-bold ml-1 uppercase">Sets</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </section>
 
-        {/* 下方內容區 - 可捲動 */}
-        <div className="flex-1 overflow-y-auto bg-[#FDFDFC] px-12 py-10">
-          <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
+        {/* Workspace: Test Group Details */}
+        <div className="flex-1 overflow-y-auto p-6 lg:p-10">
+          <div className="max-w-6xl mx-auto flex flex-col xl:flex-row gap-10">
             
-            {/* 測項清單區 */}
-            <div className="lg:col-span-8 space-y-12">
+            <div className="flex-1 space-y-10">
               {standards.filter(s => activeApps.includes(s.id)).map(standard => (
-                <div key={standard.id} className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-50 transition-all hover:shadow-xl hover:shadow-slate-200/50">
-                  <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-6 border-b border-slate-100 gap-4">
+                <div key={standard.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
+                  <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-5 border-b border-slate-100 gap-4">
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 ${APP_COLORS[standard.id] || APP_COLORS.default} text-white rounded-2xl flex items-center justify-center shadow-lg`}>
                         {getAppIcon(standard.icon, "w-6 h-6")}
                       </div>
-                      <h2 className="text-xl font-black text-slate-900">{standard.name}</h2>
+                      <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{standard.name}</h2>
                     </div>
-                    <div className="flex gap-2 no-print">
-                      <button onClick={() => setEditingTest({standardId: standard.id, isNew: true, data: {category: CategoryType.CHAMBER, duration: 1}})} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-slate-200 hover:bg-black transition-all">+ 新增測項</button>
-                      <button onClick={() => toggleAllInStandard(standard, true)} className="px-5 py-2.5 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase hover:bg-slate-100 transition-colors">全選</button>
-                      <button onClick={() => toggleAllInStandard(standard, false)} className="px-5 py-2.5 bg-slate-50 text-rose-500 rounded-xl text-[10px] font-black uppercase hover:bg-rose-50 transition-colors">取消</button>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingTest({standardId: standard.id, isNew: true, data: {category: CategoryType.CHAMBER, duration: 1}})} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-sm">+ 新增項目</button>
+                      <button onClick={() => toggleAllInStandard(standard, true)} className="px-3 py-2 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-bold uppercase hover:bg-slate-100 border border-slate-200">全選</button>
+                      <button onClick={() => toggleAllInStandard(standard, false)} className="px-3 py-2 bg-slate-50 text-rose-500 rounded-xl text-[10px] font-bold uppercase hover:bg-rose-50 border border-rose-100">清除</button>
                     </div>
                   </header>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                     {Object.values(CategoryType).map(cat => {
                       const items = standard.categories[cat] || [];
                       if (items.length === 0) return null;
                       return (
                         <div key={cat} className="space-y-4">
-                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-l-4 border-slate-100 pl-3">{cat}</h4>
-                          <div className="space-y-2">
+                          <h4 className="text-lg font-bold text-slate-900 border-l-4 border-slate-300 pl-4 py-0.5 mb-2">{cat}</h4>
+                          <div className="space-y-3">
                             {items.map(item => {
                               const isSelected = selectedTests[standard.id]?.[item.id];
+                              const isPkg = item.name.toLowerCase().includes('pkg');
                               return (
-                                <div key={item.id} className="relative group/item">
-                                  <button onClick={() => toggleTest(standard.id, item.id)} className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-300 ${isSelected ? 'border-slate-900 bg-slate-50 shadow-sm' : 'border-slate-50 bg-white hover:border-slate-200'}`}>
-                                    <div className="text-left overflow-hidden">
-                                      <span className={`text-xs font-black block truncate ${isSelected ? 'text-slate-900' : 'text-slate-300'}`}>{item.name}</span>
-                                      <span className={`text-[9px] font-bold uppercase tracking-widest ${isSelected ? 'text-slate-400' : 'text-slate-200'}`}>{item.duration} WD</span>
+                                <div key={item.id} className="relative group/card">
+                                  <div 
+                                    onClick={() => toggleTest(standard.id, item.id)}
+                                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'bg-indigo-50/40 border-indigo-600 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-200'}`}
+                                  >
+                                    <div className="flex-1 pr-14">
+                                      <div className="flex items-center gap-2">
+                                        <p className={`text-sm font-semibold transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-400'}`}>{item.name}</p>
+                                        {isPkg && <span className="text-[8px] bg-slate-800 text-white px-1.5 py-0.5 rounded font-black uppercase">PKG</span>}
+                                      </div>
+                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.duration} WD</p>
                                     </div>
-                                    <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-slate-900 border-slate-900 text-white' : 'border-slate-100 text-transparent'}`}>
-                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'border-slate-200'}`}>
+                                      {isSelected && <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
                                     </div>
-                                  </button>
-                                  <div className="absolute top-1/2 -right-12 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover/item:opacity-100 transition-all pointer-events-auto z-10 no-print">
-                                    <button onClick={(e) => { e.stopPropagation(); setEditingTest({standardId: standard.id, isNew: false, data: item}); }} className="p-1.5 bg-white shadow-xl rounded-lg text-slate-400 hover:text-indigo-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5}/></svg></button>
-                                    <button onClick={(e) => { e.stopPropagation(); deleteTestItem(standard.id, cat, item.id); }} className="p-1.5 bg-white shadow-xl rounded-lg text-slate-400 hover:text-rose-600 border border-slate-50"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5}/></svg></button>
+                                  </div>
+                                  
+                                  <div className="absolute top-1/2 -translate-y-1/2 right-12 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10 scale-90">
+                                    <button onClick={(e) => { e.stopPropagation(); setEditingTest({standardId: standard.id, isNew: false, data: item}); }} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-indigo-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5}/></svg></button>
+                                    <button onClick={(e) => deleteTestItem(e, standard.id, cat, item.id)} className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-400 hover:text-rose-600 hover:scale-110 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5}/></svg></button>
                                   </div>
                                 </div>
                               );
@@ -346,129 +432,168 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* 控制面板區 */}
-            <div className="lg:col-span-4 space-y-10 no-print">
-              <div className="sticky top-0 space-y-10">
-                <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border border-slate-800">
-                  <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/20 rounded-full -mr-16 -mt-16 blur-[60px]"></div>
-                  <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-8">Infrastructure Settings</h3>
-                  
-                  <div className="space-y-10">
-                    <div className="flex justify-between items-center group">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Track A Samples</span>
-                        <span className="text-[9px] font-bold text-slate-600">Environmental Units</span>
+            {/* Controls Side Panel - Fixed Options */}
+            <aside className="xl:w-80 shrink-0 space-y-6">
+              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-8 sticky top-6 border border-slate-800">
+                <div className="text-center">
+                  <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2">Strategy Settings</h3>
+                  <div className="h-0.5 w-12 bg-indigo-500 mx-auto rounded-full"></div>
+                </div>
+                
+                <div className="space-y-6">
+                  {/* Sample Requirements */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">樣品組數需求分配</label>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                        <span className="text-[10px] font-bold text-slate-400">Track A 組數</span>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setEnvSampleCount(Math.max(1, envSampleCount - 1))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                          <span className="w-4 text-center font-bold tabular-nums">{envSampleCount}</span>
+                          <button onClick={() => setEnvSampleCount(envSampleCount + 1)} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                        </div>
                       </div>
-                      <div className="flex items-center bg-white/5 rounded-2xl p-1 border border-white/5">
-                        <button onClick={() => setEnvSampleCount(Math.max(0, envSampleCount - 1))} className="w-10 h-10 text-xl font-light hover:bg-white/10 rounded-xl transition-all">-</button>
-                        <span className="w-12 text-center font-black text-xl tabular-nums">{envSampleCount}</span>
-                        <button onClick={() => setEnvSampleCount(envSampleCount + 1)} className="w-10 h-10 text-xl font-light hover:bg-white/10 rounded-xl transition-all">+</button>
+                      <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                        <span className="text-[10px] font-bold text-slate-400">Track B 組數</span>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setMechSampleCount(Math.max(0, mechSampleCount - 1))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                          <span className="w-4 text-center font-bold tabular-nums">{mechSampleCount}</span>
+                          <button onClick={() => setMechSampleCount(mechSampleCount + 1)} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex justify-between items-center group">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Track B Samples</span>
-                        <span className="text-[9px] font-bold text-slate-600">Mechanical Units</span>
-                      </div>
-                      <div className="flex items-center bg-white/5 rounded-2xl p-1 border border-white/5">
-                        <button onClick={() => setMechSampleCount(Math.max(0, mechSampleCount - 1))} className="w-10 h-10 text-xl font-light hover:bg-white/10 rounded-xl transition-all">-</button>
-                        <span className="w-12 text-center font-black text-xl tabular-nums">{mechSampleCount}</span>
-                        <button onClick={() => setMechSampleCount(mechSampleCount + 1)} className="w-10 h-10 text-xl font-light hover:bg-white/10 rounded-xl transition-all">+</button>
-                      </div>
+                      {pkgStrategy === PkgSampleStrategy.INDEPENDENT && (
+                        <div className="flex justify-between items-center bg-white/5 rounded-xl p-3 border border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400">Track C 組數</span>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => setPkgSampleCount(Math.max(1, pkgSampleCount - 1))} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">-</button>
+                            <span className="w-4 text-center font-bold tabular-nums">{pkgSampleCount}</span>
+                            <button onClick={() => setPkgSampleCount(pkgSampleCount + 1)} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/20 transition-all">+</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="mt-12 pt-8 border-t border-white/5 space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase text-indigo-100 tracking-[0.2em]">Strategy Mode</span>
-                      <span className="text-[10px] font-bold text-slate-500 italic">Auto-Optimization</span>
+                  {/* Storage Strategy - ADDED BACK */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage 類別執行</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => setStorageStrategy(ExecutionStrategy.SERIAL)} 
+                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${storageStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                      >
+                        串聯模式
+                      </button>
+                      <button 
+                        onClick={() => setStorageStrategy(ExecutionStrategy.PARALLEL)} 
+                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${storageStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                      >
+                        並行模式
+                      </button>
                     </div>
-                    <div className="flex gap-3">
-                      <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${calculationResults.currentExecutionMode === ExecutionStrategy.SERIAL ? 'bg-indigo-600 text-white shadow-xl' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>接續串聯</button>
-                      <button disabled={calculationResults.totalSelectedUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${calculationResults.currentExecutionMode === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 text-white shadow-xl' : 'bg-white/5 text-slate-400 hover:bg-white/10'} disabled:opacity-20`}>並聯加速</button>
+                  </div>
+
+                  {/* PKG Strategy */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PKG 樣品策略</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => setPkgStrategy(PkgSampleStrategy.REUSE)} 
+                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${pkgStrategy === PkgSampleStrategy.REUSE ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                      >
+                        延用樣品
+                      </button>
+                      <button 
+                        onClick={() => setPkgStrategy(PkgSampleStrategy.INDEPENDENT)} 
+                        className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${pkgStrategy === PkgSampleStrategy.INDEPENDENT ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                      >
+                        獨立樣品
+                      </button>
+                    </div>
+                    <p className="text-[8px] text-slate-500 text-center font-medium italic mt-1">
+                      {pkgStrategy === PkgSampleStrategy.REUSE ? "💡 延用樣品需增加 7 天前置整理時間" : "💡 獨立樣品不需整理時間，但需額外樣品"}
+                    </p>
+                  </div>
+
+                  {/* Master Strategy */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">主關鍵路徑策略</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setStrategy(ExecutionStrategy.SERIAL)} className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${calculationResults.currentStrategy === ExecutionStrategy.SERIAL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}>總程串聯</button>
+                      <button disabled={calculationResults.totalUnits <= 1} onClick={() => setStrategy(ExecutionStrategy.PARALLEL)} className={`py-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all ${calculationResults.currentStrategy === ExecutionStrategy.PARALLEL ? 'bg-indigo-600 shadow-lg ring-1 ring-white/20' : 'bg-white/5 text-slate-500 hover:bg-white/10'} disabled:opacity-20`}>總程並聯</button>
                     </div>
                   </div>
                 </div>
 
-                {/* 底部功能區 */}
-                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl shadow-slate-200/40">
-                  <div className="flex items-center justify-between mb-8">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Items Configured</span>
-                      <span className="text-3xl font-black text-slate-900 tabular-nums">
-                        {(Object.values(selectedTests) as Record<string, boolean>[]).reduce((sum, std) => sum + Object.values(std).filter(v => v).length, 0)}
-                        <small className="text-xs font-bold text-slate-400 ml-2 uppercase">Tests</small>
-                      </span>
-                    </div>
-                    <button onClick={() => { if(confirm('清除所有規劃設定？')) { setSelectedTests({}); setEnvSampleCount(0); setMechSampleCount(0); } }} className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 group">
-                      <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2.5}/></svg>
-                    </button>
+                <div className="pt-6 border-t border-white/5">
+                  <div className="flex gap-2.5 text-indigo-400 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10 shadow-inner">
+                    <span className="text-sm">⚙️</span>
+                    <p className="text-[9px] leading-relaxed font-medium">
+                      系統邏輯：若選「延用樣品」，包裝測試將排在 Track A 環境測試之後（+7D）。若選「獨立樣品」，可同步於 Track C 執行。
+                    </p>
                   </div>
-                  <button onClick={() => window.print()} className="w-full py-6 bg-slate-900 text-white rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:bg-black hover:-translate-y-1 transition-all active:scale-95">輸出列印報表</button>
                 </div>
               </div>
-            </div>
-
+            </aside>
           </div>
         </div>
       </main>
 
-      {/* 測項編輯彈窗 */}
+      {/* Test Item Modal */}
       {editingTest && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6 no-print">
-          <form onSubmit={saveTestItem} className="bg-white rounded-[3.5rem] p-16 max-w-lg w-full shadow-2xl border border-white/20">
-            <h3 className="text-3xl font-black mb-12 text-slate-900 tracking-tight">調整測項參數</h3>
-            <div className="space-y-10">
-              <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">測項名稱</label>
-                <input required type="text" value={editingTest.data.name || ''} onChange={e => setEditingTest({...editingTest, data: {...editingTest.data, name: e.target.value}})} className="w-full bg-slate-50 rounded-[1.8rem] px-8 py-6 outline-none font-black border border-slate-100 focus:bg-white transition-all text-xl shadow-inner"/>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <form onSubmit={saveTestItem} className="bg-white rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl border border-slate-100 space-y-8 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-2xl font-bold text-slate-900">測試項目編輯</h3>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">項目名稱 (名稱含 "PKG" 可啟動特殊邏輯)</label>
+                <input required type="text" value={editingTest.data.name || ''} onChange={e => setEditingTest({...editingTest, data: {...editingTest.data, name: e.target.value}})} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all"/>
               </div>
-              <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">工期 (Working Days)</label>
-                <div className="relative">
-                  <input required type="number" step="0.1" value={editingTest.data.duration || ''} onChange={e => setEditingTest({...editingTest, data: {...editingTest.data, duration: parseFloat(e.target.value)}})} className="w-full bg-slate-50 rounded-[1.8rem] px-8 py-6 outline-none font-black border border-slate-100 focus:bg-white transition-all text-2xl pr-20 shadow-inner tabular-nums"/>
-                  <span className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-300 font-black text-sm uppercase">WD</span>
+              <div className="flex gap-4">
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">工期 (WD)</label>
+                  <input required type="number" step="0.5" value={editingTest.data.duration || ''} onChange={e => setEditingTest({...editingTest, data: {...editingTest.data, duration: parseFloat(e.target.value)}})} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all"/>
+                </div>
+                <div className="flex-[2] space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">所屬類別</label>
+                  <select value={editingTest.data.category} onChange={e => setEditingTest({...editingTest, data: {...editingTest.data, category: e.target.value as CategoryType}})} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all appearance-none cursor-pointer">
+                    {Object.values(CategoryType).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
                 </div>
               </div>
-              <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">規劃分類</label>
-                <select value={editingTest.data.category} onChange={e => setEditingTest({...editingTest, data: {...editingTest.data, category: e.target.value as CategoryType}})} className="w-full bg-slate-50 rounded-[1.8rem] px-8 py-6 outline-none font-black border border-slate-100 focus:bg-white transition-all appearance-none cursor-pointer text-lg shadow-inner">
-                  {Object.values(CategoryType).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
             </div>
-            <div className="flex gap-5 mt-16">
-              <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-7 bg-slate-50 text-slate-400 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest hover:bg-slate-100 transition-colors">取消</button>
-              <button type="submit" className="flex-1 py-7 bg-slate-900 text-white rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest shadow-2xl hover:bg-black transition-all">確認儲存</button>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setEditingTest(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
+              <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">儲存測項</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* 領域編輯彈窗 */}
+      {/* Application Domain Modal */}
       {editingStandard && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6 no-print">
-          <form onSubmit={saveStandard} className="bg-white rounded-[3.5rem] p-16 max-w-md w-full shadow-2xl border border-white/20">
-            <h3 className="text-3xl font-black mb-12 text-slate-900 tracking-tight">定義測試標準</h3>
-            <div className="space-y-10">
-              <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1">名稱</label>
-                <input required type="text" value={editingStandard.data.name || ''} onChange={e => setEditingStandard({...editingStandard, data: {...editingStandard.data, name: e.target.value}})} className="w-full bg-slate-50 rounded-[1.8rem] px-8 py-6 outline-none font-black border border-slate-100 focus:bg-white transition-all text-xl shadow-inner"/>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <form onSubmit={saveStandard} className="bg-white rounded-[2.5rem] p-10 max-md w-full shadow-2xl border border-slate-100 space-y-8 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-2xl font-bold text-slate-900">應用領域設定</h3>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">顯示名稱</label>
+                <input required type="text" value={editingStandard.data.name || ''} onChange={e => setEditingStandard({...editingStandard, data: {...editingStandard.data, name: e.target.value}})} className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:bg-white outline-none font-semibold text-slate-700 transition-all"/>
               </div>
-              <div className="space-y-5">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest ml-1 text-center block">專屬圖示</label>
-                <div className="flex gap-5 p-5 bg-slate-50 rounded-[2.2rem] border border-slate-100 shadow-inner">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center block">Icon 樣式</label>
+                <div className="grid grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   {['factory', 'train', 'ship', 'bolt'].map(icon => (
-                    <button key={icon} type="button" onClick={() => setEditingStandard({...editingStandard, data: {...editingStandard.data, icon}})} className={`flex-1 aspect-square rounded-2xl flex items-center justify-center transition-all duration-300 ${editingStandard.data.icon === icon ? 'bg-indigo-600 text-white shadow-2xl scale-110' : 'text-slate-300 hover:text-slate-500 hover:bg-white'}`}>
-                      {getAppIcon(icon, "w-7 h-7")}
+                    <button key={icon} type="button" onClick={() => setEditingStandard({...editingStandard, data: {...editingStandard.data, icon}})} className={`aspect-square rounded-xl flex items-center justify-center transition-all ${editingStandard.data.icon === icon ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-200' : 'bg-white text-slate-300 hover:text-slate-500 hover:bg-slate-50 shadow-sm'}`}>
+                      {getAppIcon(icon, "w-6 h-6")}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="flex gap-5 mt-16">
-              <button type="button" onClick={() => setEditingStandard(null)} className="flex-1 py-7 bg-slate-50 text-slate-400 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest hover:bg-slate-100 transition-colors">取消</button>
-              <button type="submit" className="flex-1 py-7 bg-slate-900 text-white rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest shadow-2xl hover:bg-black transition-all">儲存標準</button>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setEditingStandard(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">取消</button>
+              <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all">更新類別</button>
             </div>
           </form>
         </div>

@@ -30,6 +30,11 @@ export enum ExecutionStrategy {
   PARALLEL = 'PARALLEL' // 樣品平行 (增加樣品)
 }
 
+export enum PkgSampleStrategy {
+  REUSE = 'REUSE', // 延用 Track A 樣品 (需 +7 天整理)
+  INDEPENDENT = 'INDEPENDENT' // 獨立樣品 (不需 +7 天，但增加組數)
+}
+
 export interface SelectedTests {
   [standardId: string]: {
     [itemId: string]: boolean;

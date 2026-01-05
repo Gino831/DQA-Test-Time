@@ -23,24 +23,29 @@
             .no-print {
                 display: none !important;
             }
+            /* 強制解除高度限制，允許跨頁列印 */
+            html, body, #root, main, .print-area, div {
+                height: auto !important;
+                overflow: visible !important;
+                max-height: none !important;
+            }
             body {
                 background-color: white !important;
-                padding-bottom: 0 !important;
             }
             .print-area {
                 width: 100% !important;
                 margin: 0 !important;
                 padding: 0 !important;
+                display: block !important;
             }
-            .page-break {
-                page-break-before: always;
+            /* 強化陰影與邊框在列印時的表現 */
+            .bg-white {
+                border: 1px solid #eee !important;
             }
-            header, footer, .sticky, button {
-                display: none !important;
-            }
-            /* 確保背景顏色在列印時顯示 */
+            /* 確保背景色印出 (大部分現代瀏覽器支援) */
             .bg-indigo-500, .bg-amber-500, .bg-emerald-500, .bg-sky-500, .bg-slate-500, .bg-slate-900 {
                 background-color: var(--tw-bg-opacity) !important;
+                -webkit-print-color-adjust: exact;
             }
         }
     </style>
